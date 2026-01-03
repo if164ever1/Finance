@@ -117,4 +117,3 @@ Data is stored in JSON files organized by payment type and year:
 - Cashback is automatically calculated at 3% of the purchase amount
 - The backend uses atomic file writes (writes to temp file, then renames) to prevent data corruption
 - All dates are stored in YYYY-MM-DD format
-
