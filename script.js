@@ -121,8 +121,33 @@ function renderTransactions() {
     });
 }
 
+// Show error message (small, non-intrusive)
+function showError(message) {
+    // Remove existing error message if any
+    const existingError = document.querySelector('.error-message');
+    if (existingError) {
+        existingError.remove();
+    }
+
+    // Create error message element
+    const errorDiv = document.createElement('div');
+    errorDiv.className = 'error-message';
+    errorDiv.textContent = message;
+    errorDiv.style.cssText = 'color: #f44336; background-color: #ffebee; padding: 10px; border-radius: 4px; margin-top: 10px; font-size: 14px;';
+    
+    // Insert after the Add Purchase button
+    addPurchaseBtn.parentNode.insertBefore(errorDiv, addPurchaseBtn.nextSibling);
+    
+    // Auto-remove after 5 seconds
+    setTimeout(() => {
+        if (errorDiv.parentNode) {
+            errorDiv.remove();
+        }
+    }, 5000);
+}
+
 // Add a new purchase transaction
-function addPurchase() {
+async function addPurchase() {
     // Get and validate description
     const description = purchaseDescriptionInput.value.trim();
     if (description === '') {
@@ -150,24 +175,53 @@ function addPurchase() {
     // Calculate cashback for this purchase (already calculated in the field, but recalculate to ensure accuracy)
     const cashback = calculateCashback(amount);
 
-    // Create transaction object with description, amount, cashback, and date
-    const transaction = {
-        description: description,
-        amount: amount,
-        cashback: cashback,
-        date: date // Store date in YYYY-MM-DD format
-    };
-    
-    transactions.push(transaction);
+    // Send data to backend API
+    try {
+        const response = await fetch('http://localhost:3000/api/purchase', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                paymentType: description, // The description field is used as paymentType
+                amount: amount,
+                date: date
+            })
+        });
 
-    // Clear the input fields (description and amount, reset cashback to $0.00, keep date as default for next entry)
-    purchaseDescriptionInput.value = '';
-    purchaseAmountInput.value = '';
-    cashbackAmountInput.value = '$0.00';
+        const result = await response.json();
 
-    // Update the UI
-    updateStats();
-    renderTransactions();
+        if (!response.ok) {
+            // Backend returned an error
+            showError(`Error: ${result.error || 'Failed to save purchase'}`);
+            return;
+        }
+
+        // Backend save successful, now update the UI
+        // Create transaction object with description, amount, cashback, and date
+        const transaction = {
+            description: description,
+            amount: amount,
+            cashback: cashback,
+            date: date // Store date in YYYY-MM-DD format
+        };
+        
+        transactions.push(transaction);
+
+        // Clear the input fields (description and amount, reset cashback to $0.00, keep date as default for next entry)
+        purchaseDescriptionInput.value = '';
+        purchaseAmountInput.value = '';
+        cashbackAmountInput.value = '$0.00';
+
+        // Update the UI
+        updateStats();
+        renderTransactions();
+
+    } catch (error) {
+        // Network error or fetch failed
+        console.error('Error calling backend API:', error);
+        showError('Failed to connect to server. Please make sure the backend is running.');
+    }
 }
 
 // Event listener for the Add Purchase button
