@@ -2,7 +2,9 @@
 let transactions = [];
 
 // Cache DOM elements for better performance
+const purchaseDescriptionInput = document.getElementById('purchaseDescription');
 const purchaseAmountInput = document.getElementById('purchaseAmount');
+const cashbackAmountInput = document.getElementById('cashbackAmount');
 const purchaseDateInput = document.getElementById('purchaseDate');
 const addPurchaseBtn = document.getElementById('addPurchaseBtn');
 const totalSpentElement = document.getElementById('totalSpent');
@@ -13,6 +15,20 @@ const transactionsList = document.getElementById('transactionsList');
 const today = new Date();
 const todayFormatted = today.toISOString().split('T')[0]; // Format: YYYY-MM-DD
 purchaseDateInput.value = todayFormatted;
+
+// Update cashback field live as user types the amount
+purchaseAmountInput.addEventListener('input', function() {
+    const inputValue = this.value.trim();
+    const amount = parseFloat(inputValue);
+    
+    // Calculate and display cashback if amount is valid, otherwise show $0.00
+    if (inputValue !== '' && !isNaN(amount) && amount > 0) {
+        const cashback = calculateCashback(amount);
+        cashbackAmountInput.value = formatCurrency(cashback);
+    } else {
+        cashbackAmountInput.value = '$0.00';
+    }
+});
 
 // Calculate cashback at 3% rate
 function calculateCashback(amount) {
@@ -66,28 +82,38 @@ function renderTransactions() {
         const detailsDiv = document.createElement('div');
         detailsDiv.className = 'transaction-details';
         
+        // Display description first
+        const descriptionSpan = document.createElement('span');
+        descriptionSpan.className = 'transaction-description';
+        descriptionSpan.textContent = transaction.description;
+        
+        // Add arrow separator
+        const arrow1 = document.createTextNode(' — ');
+        
         const amountSpan = document.createElement('span');
         amountSpan.className = 'transaction-amount';
         amountSpan.textContent = formatCurrency(transaction.amount);
         
         // Add arrow separator
-        const arrow1 = document.createTextNode(' → ');
+        const arrow2 = document.createTextNode(' → ');
         
         const cashbackSpan = document.createElement('span');
         cashbackSpan.className = 'transaction-cashback';
         cashbackSpan.textContent = 'Cashback: ' + formatCurrency(transaction.cashback);
         
         // Add arrow separator
-        const arrow2 = document.createTextNode(' → ');
+        const arrow3 = document.createTextNode(' → ');
         
         const dateSpan = document.createElement('span');
         dateSpan.className = 'transaction-date';
         dateSpan.textContent = 'Date: ' + transaction.date;
         
-        detailsDiv.appendChild(amountSpan);
+        detailsDiv.appendChild(descriptionSpan);
         detailsDiv.appendChild(arrow1);
-        detailsDiv.appendChild(cashbackSpan);
+        detailsDiv.appendChild(amountSpan);
         detailsDiv.appendChild(arrow2);
+        detailsDiv.appendChild(cashbackSpan);
+        detailsDiv.appendChild(arrow3);
         detailsDiv.appendChild(dateSpan);
         
         listItem.appendChild(detailsDiv);
@@ -97,11 +123,18 @@ function renderTransactions() {
 
 // Add a new purchase transaction
 function addPurchase() {
-    // Get and parse the input value
+    // Get and validate description
+    const description = purchaseDescriptionInput.value.trim();
+    if (description === '') {
+        alert('Please enter a purchase description.');
+        return;
+    }
+
+    // Get and parse the amount input value
     const inputValue = purchaseAmountInput.value.trim();
     const amount = parseFloat(inputValue);
 
-    // Validate input: check if empty, not a number, or negative
+    // Validate amount: check if empty, not a number, or negative
     if (inputValue === '' || isNaN(amount) || amount <= 0) {
         alert('Please enter a valid positive amount.');
         return;
@@ -114,11 +147,12 @@ function addPurchase() {
         return;
     }
 
-    // Calculate cashback for this purchase
+    // Calculate cashback for this purchase (already calculated in the field, but recalculate to ensure accuracy)
     const cashback = calculateCashback(amount);
 
-    // Create transaction object with amount, cashback, and date
+    // Create transaction object with description, amount, cashback, and date
     const transaction = {
+        description: description,
         amount: amount,
         cashback: cashback,
         date: date // Store date in YYYY-MM-DD format
@@ -126,8 +160,10 @@ function addPurchase() {
     
     transactions.push(transaction);
 
-    // Clear the amount input field (keep date as default for next entry)
+    // Clear the input fields (description and amount, reset cashback to $0.00, keep date as default for next entry)
+    purchaseDescriptionInput.value = '';
     purchaseAmountInput.value = '';
+    cashbackAmountInput.value = '$0.00';
 
     // Update the UI
     updateStats();
@@ -137,7 +173,13 @@ function addPurchase() {
 // Event listener for the Add Purchase button
 addPurchaseBtn.addEventListener('click', addPurchase);
 
-// Allow adding purchase with Enter key
+// Allow adding purchase with Enter key from description or amount field
+purchaseDescriptionInput.addEventListener('keypress', function(event) {
+    if (event.key === 'Enter') {
+        addPurchase();
+    }
+});
+
 purchaseAmountInput.addEventListener('keypress', function(event) {
     if (event.key === 'Enter') {
         addPurchase();

@@ -7,46 +7,73 @@
     <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-    <div class="container">
-        <h1>My Finance Tracker</h1>
-        <h2>3% Cashback Credit Card</h2>
+    <div class="layout">
+        <!-- Left column: Finance Tracker -->
+        <div class="container">
+            <h1>My Finance Tracker</h1>
+            <h2>3% Cashback Credit Card</h2>
 
-        <!-- Input section for adding purchases -->
-        <div class="input-section">
-            <label for="purchaseAmount">Purchase Amount (USD)</label>
-            <input 
-                type="number" 
-                id="purchaseAmount" 
-                placeholder="Enter amount"
-                step="0.01"
-                min="0"
-            >
-            <label for="purchaseDate">Purchase Date</label>
-            <input 
-                type="date" 
-                id="purchaseDate"
-            >
-            <button id="addPurchaseBtn">Add Purchase</button>
+            <!-- Input section for adding purchases -->
+            <div class="input-section">
+                <label for="purchaseDescription">Purchase Description</label>
+                <input 
+                    type="text" 
+                    id="purchaseDescription" 
+                    placeholder="What did you pay for? (e.g., Gym, Gas, Groceries)"
+                    required
+                >
+                <label for="purchaseAmount">Purchase Amount (USD)</label>
+                <input 
+                    type="number" 
+                    id="purchaseAmount" 
+                    placeholder="Enter amount"
+                    step="0.01"
+                    min="0"
+                    required
+                >
+                <label for="cashbackAmount">Cashback (3%)</label>
+                <input 
+                    type="text" 
+                    id="cashbackAmount" 
+                    value="$0.00"
+                    readonly
+                >
+                <label for="purchaseDate">Purchase Date</label>
+                <input 
+                    type="date" 
+                    id="purchaseDate"
+                >
+                <button id="addPurchaseBtn">Add Purchase</button>
+            </div>
+
+            <!-- Stats section showing totals -->
+            <div class="stats-section">
+                <div class="stat-item">
+                    <span class="stat-label">Total Spent:</span>
+                    <span class="stat-value" id="totalSpent">$0.00</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Total Cashback Earned:</span>
+                    <span class="stat-value cashback-value" id="totalCashback">$0.00</span>
+                </div>
+            </div>
+
+            <!-- Transactions list -->
+            <div class="transactions-section">
+                <h3 class="transactions-title">Transactions</h3>
+                <ul class="transactions-list" id="transactionsList">
+                    <li class="empty-state">No transactions yet. Add a purchase to get started.</li>
+                </ul>
+            </div>
         </div>
 
-        <!-- Stats section showing totals -->
-        <div class="stats-section">
-            <div class="stat-item">
-                <span class="stat-label">Total Spent:</span>
-                <span class="stat-value" id="totalSpent">$0.00</span>
+        <!-- Right column: Dashboard Panel -->
+        <div class="dashboard-panel">
+            <h1 class="dashboard-title">Dashboard</h1>
+            <h2 class="dashboard-subtitle">Reports and analytics will appear here.</h2>
+            <div class="dashboard-placeholder">
+                Coming soon: Monthly summaries, charts, exports
             </div>
-            <div class="stat-item">
-                <span class="stat-label">Total Cashback Earned:</span>
-                <span class="stat-value cashback-value" id="totalCashback">$0.00</span>
-            </div>
-        </div>
-
-        <!-- Transactions list -->
-        <div class="transactions-section">
-            <h3 class="transactions-title">Transactions</h3>
-            <ul class="transactions-list" id="transactionsList">
-                <li class="empty-state">No transactions yet. Add a purchase to get started.</li>
-            </ul>
         </div>
     </div>
 
