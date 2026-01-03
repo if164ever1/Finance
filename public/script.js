@@ -170,8 +170,9 @@ async function addPurchase() {
         purchaseAmountInput.value = '';
         cashbackAmountInput.value = '$0.00';
 
-        // Reload monthly data to show the new transaction
+        // Reload monthly data and dashboard data to show the new transaction
         await loadMonthlyData();
+        await loadDashboardData();
 
     } catch (error) {
         console.error('Error calling backend API:', error);
@@ -194,5 +195,55 @@ purchaseAmountInput.addEventListener('keypress', function(event) {
     }
 });
 
+// Dashboard panel elements
+const dashboardMonthLabel = document.getElementById('dashboardMonthLabel');
+const dashboardCount = document.getElementById('dashboardCount');
+const dashboardSpent = document.getElementById('dashboardSpent');
+const dashboardCashback = document.getElementById('dashboardCashback');
+const dashboardRate = document.getElementById('dashboardRate');
+
+// Fetch and render dashboard data
+async function loadDashboardData() {
+    try {
+        // Show loading state
+        dashboardMonthLabel.textContent = 'Loading dashboard...';
+        dashboardCount.textContent = '-';
+        dashboardSpent.textContent = '-';
+        dashboardCashback.textContent = '-';
+        
+        const response = await fetch('/api/dashboard');
+        if (!response.ok) {
+            throw new Error('Failed to load dashboard data');
+        }
+        
+        const data = await response.json();
+        renderDashboardData(data);
+    } catch (error) {
+        console.error('Error loading dashboard data:', error);
+        dashboardMonthLabel.textContent = 'Error loading dashboard';
+        dashboardCount.textContent = 'Error';
+        dashboardSpent.textContent = 'Error';
+        dashboardCashback.textContent = 'Error';
+        dashboardRate.textContent = '';
+    }
+}
+
+// Render dashboard data to the right panel
+function renderDashboardData(data) {
+    // Update month label
+    dashboardMonthLabel.textContent = data.period.label;
+    
+    // Update stat values
+    dashboardCount.textContent = data.spending.count;
+    dashboardSpent.textContent = formatCurrency(data.spending.totalSpent);
+    dashboardCashback.textContent = formatCurrency(data.cashback.totalCashbackUSD);
+    
+    // Update cashback rate (convert 0.03 to percentage)
+    const ratePercent = (data.cashback.rate * 100).toFixed(0);
+    dashboardRate.textContent = `Rate: ${ratePercent}%`;
+}
+
 // Load monthly data when page loads
 loadMonthlyData();
+// Load dashboard data when page loads
+loadDashboardData();

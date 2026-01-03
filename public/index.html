@@ -89,9 +89,27 @@
         <!-- Right column: Dashboard Panel -->
         <div class="dashboard-panel">
             <h1 class="dashboard-title">Dashboard</h1>
-            <h2 class="dashboard-subtitle">Reports and analytics will appear here.</h2>
-            <div class="dashboard-placeholder">
-                Coming soon: Monthly summaries, charts, exports
+            
+            <!-- This Month Summary -->
+            <div class="dashboard-summary">
+                <div class="dashboard-summary-label">This Month</div>
+                <div class="dashboard-month-label" id="dashboardMonthLabel">Loading...</div>
+                
+                <div class="dashboard-stats-grid" id="dashboardStatsGrid">
+                    <div class="dashboard-stat-card">
+                        <div class="dashboard-stat-label">Transactions</div>
+                        <div class="dashboard-stat-value" id="dashboardCount">-</div>
+                    </div>
+                    <div class="dashboard-stat-card">
+                        <div class="dashboard-stat-label">Total Spent</div>
+                        <div class="dashboard-stat-value" id="dashboardSpent">-</div>
+                    </div>
+                    <div class="dashboard-stat-card">
+                        <div class="dashboard-stat-label">Cashback Earned</div>
+                        <div class="dashboard-stat-value dashboard-stat-cashback" id="dashboardCashback">-</div>
+                        <div class="dashboard-stat-rate" id="dashboardRate">Rate: 3%</div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

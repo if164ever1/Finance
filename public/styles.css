@@ -53,14 +53,69 @@ body {
     margin-bottom: 40px;
 }
 
-.dashboard-placeholder {
-    border: 2px dashed #ddd;
+/* Dashboard Summary Section */
+.dashboard-summary {
+    margin-top: 20px;
+}
+
+.dashboard-summary-label {
+    font-size: 14px;
+    color: #666;
+    font-weight: 500;
+    margin-bottom: 8px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.dashboard-month-label {
+    font-size: 24px;
+    color: #333;
+    font-weight: 600;
+    margin-bottom: 24px;
+}
+
+/* Dashboard Stats Grid */
+.dashboard-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 16px;
+}
+
+.dashboard-stat-card {
+    background-color: #f9f9f9;
     border-radius: 8px;
-    padding: 60px 40px;
-    text-align: center;
+    padding: 20px;
+    border: 1px solid #e0e0e0;
+}
+
+.dashboard-stat-label {
+    font-size: 13px;
+    color: #666;
+    margin-bottom: 8px;
+    font-weight: 500;
+}
+
+.dashboard-stat-value {
+    font-size: 24px;
+    font-weight: 600;
+    color: #333;
+}
+
+.dashboard-stat-cashback {
+    color: #4CAF50;
+}
+
+.dashboard-stat-rate {
+    font-size: 12px;
     color: #999;
-    font-style: italic;
-    background-color: #fafafa;
+    margin-top: 4px;
+}
+
+/* Responsive: dashboard stats grid stacks on smaller screens */
+@media (max-width: 900px) {
+    .dashboard-stats-grid {
+        grid-template-columns: 1fr;
+    }
 }
 
 /* Responsive: stack vertically on smaller screens */
