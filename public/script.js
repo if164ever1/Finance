@@ -50,7 +50,7 @@ function formatDate(dateString) {
 }
 
 // Fetch and render monthly data
-async function loadMonthlyData() {
+async function loadMonthly() {
     try {
         const response = await fetch('/api/monthly');
         if (!response.ok) {
@@ -144,6 +144,10 @@ async function addPurchase() {
         return;
     }
 
+    // Disable button and show saving state
+    addPurchaseBtn.disabled = true;
+    addPurchaseBtn.textContent = 'Saving...';
+
     // Send data to backend API
     try {
         const response = await fetch('/api/transactions', {
@@ -171,12 +175,16 @@ async function addPurchase() {
         cashbackAmountInput.value = '$0.00';
 
         // Reload monthly data and dashboard data to show the new transaction
-        await loadMonthlyData();
-        await loadDashboardData();
+        await loadMonthly();
+        await loadDashboard();
 
     } catch (error) {
         console.error('Error calling backend API:', error);
         showError('Failed to connect to server. Please make sure the backend is running.');
+    } finally {
+        // Re-enable button and reset text
+        addPurchaseBtn.disabled = false;
+        addPurchaseBtn.textContent = 'Add Purchase';
     }
 }
 
@@ -203,7 +211,7 @@ const dashboardCashback = document.getElementById('dashboardCashback');
 const dashboardRate = document.getElementById('dashboardRate');
 
 // Fetch and render dashboard data
-async function loadDashboardData() {
+async function loadDashboard() {
     try {
         // Show loading state
         dashboardMonthLabel.textContent = 'Loading dashboard...';
@@ -244,6 +252,6 @@ function renderDashboardData(data) {
 }
 
 // Load monthly data when page loads
-loadMonthlyData();
+loadMonthly();
 // Load dashboard data when page loads
-loadDashboardData();
+loadDashboard();

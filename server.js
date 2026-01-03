@@ -6,6 +6,8 @@ const app = express();
 const PORT = 3000;
 const DATA_DIR = path.join(__dirname, 'data');
 const TRANSACTIONS_FILE = path.join(DATA_DIR, 'transactions.json');
+const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
+const PRICES_FILE = path.join(DATA_DIR, 'prices.json');
 
 // Middleware
 app.use(express.json()); // Parse JSON request bodies
@@ -27,10 +29,145 @@ async function initializeData() {
             await fs.writeFile(TRANSACTIONS_FILE, JSON.stringify([], null, 2), 'utf8');
             console.log('Created transactions.json file');
         }
+
+        // Ensure settings.json exists
+        await ensureSettingsFile();
+
+        // Ensure prices.json exists
+        await ensurePricesFile();
         
         console.log(`Data directory: ${DATA_DIR}`);
     } catch (error) {
         console.error('Error initializing data:', error);
+    }
+}
+
+/**
+ * Ensure settings.json exists, create with defaults if missing
+ */
+async function ensureSettingsFile() {
+    try {
+        await fs.access(SETTINGS_FILE);
+    } catch {
+        // File doesn't exist, create with defaults
+        const defaults = {
+            cashbackRate: 0.03,
+            stakingAPR: 0.0473
+        };
+        await fs.writeFile(SETTINGS_FILE, JSON.stringify(defaults, null, 2), 'utf8');
+        console.log('Created settings.json file with defaults');
+    }
+}
+
+/**
+ * Read settings from file, fallback to defaults if corrupted or missing fields
+ */
+async function readSettings() {
+    const defaults = {
+        cashbackRate: 0.03,
+        stakingAPR: 0.0473
+    };
+
+    try {
+        const fileContent = await fs.readFile(SETTINGS_FILE, 'utf8');
+        const settings = JSON.parse(fileContent);
+
+        // Merge with defaults for missing fields
+        return {
+            cashbackRate: typeof settings.cashbackRate === 'number' ? settings.cashbackRate : defaults.cashbackRate,
+            stakingAPR: typeof settings.stakingAPR === 'number' ? settings.stakingAPR : defaults.stakingAPR
+        };
+    } catch (error) {
+        // File missing or corrupted, return defaults and optionally rewrite
+        console.warn('Settings file corrupted or missing, using defaults:', error.message);
+        // Optionally rewrite safe defaults
+        try {
+            await fs.writeFile(SETTINGS_FILE, JSON.stringify(defaults, null, 2), 'utf8');
+        } catch (writeError) {
+            console.error('Failed to rewrite settings file:', writeError.message);
+        }
+        return defaults;
+    }
+}
+
+/**
+ * Ensure prices.json exists, create with empty sol object if missing
+ */
+async function ensurePricesFile() {
+    try {
+        await fs.access(PRICES_FILE);
+    } catch {
+        // File doesn't exist, create with empty structure
+        const initial = { "sol": {} };
+        await fs.writeFile(PRICES_FILE, JSON.stringify(initial, null, 2), 'utf8');
+        console.log('Created prices.json file');
+    }
+}
+
+/**
+ * Read prices cache from file
+ */
+async function readPricesCache() {
+    try {
+        const fileContent = await fs.readFile(PRICES_FILE, 'utf8');
+        return JSON.parse(fileContent);
+    } catch (error) {
+        // File missing or corrupted, return empty structure
+        console.warn('Prices file corrupted or missing, using empty cache:', error.message);
+        return { "sol": {} };
+    }
+}
+
+/**
+ * Write prices cache to file
+ */
+async function writePricesCache(cache) {
+    try {
+        await fs.writeFile(PRICES_FILE, JSON.stringify(cache, null, 2), 'utf8');
+    } catch (error) {
+        console.error('Failed to write prices cache:', error.message);
+        throw error;
+    }
+}
+
+/**
+ * Validate if date string is in YYYY-MM-DD format
+ */
+function isValidISODate(dateString) {
+    const regex = /^\d{4}-\d{2}-\d{2}$/;
+    if (!regex.test(dateString)) return false;
+    
+    const date = new Date(dateString + 'T00:00:00');
+    return date.toISOString().startsWith(dateString);
+}
+
+/**
+ * Fetch SOL price from CoinGecko API for a specific date
+ */
+async function fetchSolPriceFromApi(dateString) {
+    try {
+        // Convert YYYY-MM-DD to DD-MM-YYYY for CoinGecko
+        const [year, month, day] = dateString.split('-');
+        const coingeckoDate = `${day}-${month}-${year}`;
+        
+        const url = `https://api.coingecko.com/api/v3/coins/solana/history?date=${coingeckoDate}&localization=false`;
+        const response = await fetch(url);
+        
+        if (!response.ok) {
+            throw new Error(`CoinGecko API returned ${response.status}`);
+        }
+        
+        const data = await response.json();
+        const priceUSD = data.market_data?.current_price?.usd;
+        
+        if (typeof priceUSD !== 'number') {
+            throw new Error('Invalid price data from API');
+        }
+        
+        return priceUSD;
+    } catch (error) {
+        console.error('Error fetching SOL price from API:', error.message);
+        throw error;
     }
 }
 
@@ -46,10 +183,72 @@ function getMonthName(month) {
 }
 
 /**
- * Calculate cashback (3% of amount, rounded to 2 decimals)
+ * GET /api/price/sol?date=YYYY-MM-DD
+ * Returns SOL price for the specified date, with caching
  */
-function calculateCashback(amount) {
-    return Math.round(amount * 0.03 * 100) / 100;
+app.get('/api/price/sol', async (req, res) => {
+    try {
+        const date = req.query.date;
+        
+        // Validate date format
+        if (!date || !isValidISODate(date)) {
+            return res.status(400).json({
+                error: 'Invalid date format',
+                message: 'Date must be in YYYY-MM-DD format'
+            });
+        }
+        
+        // Read prices cache
+        const cache = await readPricesCache();
+        
+        // Check if price is cached
+        if (cache.sol[date]) {
+            return res.json({
+                symbol: 'SOL',
+                date: date,
+                priceUSD: cache.sol[date],
+                source: 'cache'
+            });
+        }
+        
+        // Fetch from API
+        let priceUSD;
+        try {
+            priceUSD = await fetchSolPriceFromApi(date);
+        } catch (apiError) {
+            console.error('API fetch failed:', apiError.message);
+            return res.status(502).json({
+                error: 'External API error',
+                message: 'Failed to fetch price from CoinGecko API'
+            });
+        }
+        
+        // Store in cache
+        cache.sol[date] = priceUSD;
+        await writePricesCache(cache);
+        
+        // Return response
+        res.json({
+            symbol: 'SOL',
+            date: date,
+            priceUSD: priceUSD,
+            source: 'api'
+        });
+        
+    } catch (error) {
+        console.error('Error in price endpoint:', error);
+        res.status(500).json({
+            error: 'Internal server error',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * Calculate cashback (rate * amount, rounded to 2 decimals)
+ */
+function calculateCashback(amount, rate) {
+    return Math.round(amount * rate * 100) / 100;
 }
 
 /**
@@ -116,6 +315,23 @@ function moneyRound(value) {
 }
 
 /**
+ * GET /api/settings
+ * Returns current settings (read-only)
+ */
+app.get('/api/settings', async (req, res) => {
+    try {
+        const settings = await readSettings();
+        res.json(settings);
+    } catch (error) {
+        console.error('Error fetching settings:', error);
+        res.status(500).json({ 
+            error: 'Failed to fetch settings',
+            message: error.message 
+        });
+    }
+});
+
+/**
  * GET /api/dashboard
  * Returns monthly dashboard summary (cashback-only)
  * Query params: year (optional), month (optional) - defaults to current month
@@ -135,6 +351,9 @@ app.get('/api/dashboard', async (req, res) => {
             });
         }
         
+        // Read settings
+        const settings = await readSettings();
+        
         // Read transactions (gracefully handles missing/corrupted file)
         const allTransactions = await readTransactions();
         
@@ -144,8 +363,8 @@ app.get('/api/dashboard', async (req, res) => {
         // Calculate spending totals
         const totalSpent = monthTransactions.reduce((sum, t) => sum + t.amount, 0);
         
-        // Calculate cashback (3% rate)
-        const cashbackRate = 0.03;
+        // Calculate cashback using settings rate
+        const cashbackRate = settings.cashbackRate;
         const totalCashbackUSD = moneyRound(totalSpent * cashbackRate);
         
         // Build response
@@ -185,6 +404,9 @@ app.get('/api/monthly', async (req, res) => {
         const year = parseInt(req.query.year) || now.getFullYear();
         const month = parseInt(req.query.month) || (now.getMonth() + 1);
         
+        // Read settings
+        const settings = await readSettings();
+        
         // Read transactions from file
         const fileContent = await fs.readFile(TRANSACTIONS_FILE, 'utf8');
         const allTransactions = JSON.parse(fileContent);
@@ -205,7 +427,7 @@ app.get('/api/monthly', async (req, res) => {
         
         // Compute cashback for each transaction and calculate totals
         const transactionsWithCashback = monthTransactions.map(transaction => {
-            const cashback = calculateCashback(transaction.amount);
+            const cashback = calculateCashback(transaction.amount, settings.cashbackRate);
             totals.spent += transaction.amount;
             totals.cashback += cashback;
             
