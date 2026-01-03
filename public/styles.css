@@ -157,6 +157,87 @@ button:active {
     margin-bottom: 30px;
 }
 
+/* Monthly Dashboard Section */
+.monthly-section {
+    margin-top: 30px;
+    margin-bottom: 30px;
+}
+
+.monthly-title {
+    font-size: 20px;
+    color: #333;
+    margin-bottom: 10px;
+}
+
+.monthly-label {
+    font-size: 16px;
+    color: #666;
+    font-weight: 500;
+    margin-bottom: 20px;
+}
+
+.monthly-stats {
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    padding: 20px;
+    margin-bottom: 20px;
+}
+
+.monthly-table-container {
+    overflow-x: auto;
+    border-radius: 8px;
+    border: 1px solid #e0e0e0;
+}
+
+.monthly-table {
+    width: 100%;
+    border-collapse: collapse;
+    background-color: white;
+    font-size: 14px;
+}
+
+.monthly-table thead {
+    background-color: #f5f5f5;
+}
+
+.monthly-table th {
+    padding: 12px;
+    text-align: left;
+    font-weight: 600;
+    color: #333;
+    border-bottom: 2px solid #e0e0e0;
+}
+
+.monthly-table td {
+    padding: 12px;
+    border-bottom: 1px solid #f0f0f0;
+    color: #333;
+}
+
+.monthly-table tbody tr:nth-child(even) {
+    background-color: #fafafa;
+}
+
+.monthly-table tbody tr:hover {
+    background-color: #f5f5f5;
+}
+
+.monthly-table tbody tr:last-child td {
+    border-bottom: none;
+}
+
+.monthly-table .cashback-cell {
+    color: #4CAF50;
+    font-weight: 500;
+}
+
+.monthly-table .empty-state {
+    text-align: center;
+    color: #999;
+    font-style: italic;
+    padding: 20px;
+}
+
 .stat-item {
     display: flex;
     justify-content: space-between;

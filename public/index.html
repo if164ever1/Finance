@@ -46,24 +46,43 @@
                 <button id="addPurchaseBtn">Add Purchase</button>
             </div>
 
-            <!-- Stats section showing totals -->
-            <div class="stats-section">
-                <div class="stat-item">
-                    <span class="stat-label">Total Spent:</span>
-                    <span class="stat-value" id="totalSpent">$0.00</span>
+            <!-- This Month Dashboard Section -->
+            <div class="monthly-section">
+                <h3 class="monthly-title">This Month (auto-loaded)</h3>
+                <div class="monthly-label" id="monthlyLabel">Loading...</div>
+                
+                <div class="monthly-stats">
+                    <div class="stat-item">
+                        <span class="stat-label">Transactions:</span>
+                        <span class="stat-value" id="monthlyCount">0</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Total Spent:</span>
+                        <span class="stat-value" id="monthlySpent">$0.00</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-label">Total Cashback:</span>
+                        <span class="stat-value cashback-value" id="monthlyCashback">$0.00</span>
+                    </div>
                 </div>
-                <div class="stat-item">
-                    <span class="stat-label">Total Cashback Earned:</span>
-                    <span class="stat-value cashback-value" id="totalCashback">$0.00</span>
+                
+                <div class="monthly-table-container">
+                    <table class="monthly-table" id="monthlyTable">
+                        <thead>
+                            <tr>
+                                <th>Date</th>
+                                <th>Description</th>
+                                <th>Amount</th>
+                                <th>Cashback</th>
+                            </tr>
+                        </thead>
+                        <tbody id="monthlyTableBody">
+                            <tr>
+                                <td colspan="4" class="empty-state">Loading...</td>
+                            </tr>
+                        </tbody>
+                    </table>
                 </div>
-            </div>
-
-            <!-- Transactions list -->
-            <div class="transactions-section">
-                <h3 class="transactions-title">Transactions</h3>
-                <ul class="transactions-list" id="transactionsList">
-                    <li class="empty-state">No transactions yet. Add a purchase to get started.</li>
-                </ul>
             </div>
         </div>
 

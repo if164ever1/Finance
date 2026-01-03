@@ -29,7 +29,11 @@ logs/
 *.tmp
 .cache/
 
-# But DO track Assets folder and JSON files
+# Data folder (exclude transactions data)
+data/
+data/**/*
+
+# But DO track Assets folder and JSON files (if you still use it)
 !Assets/
 !Assets/**/
 !Assets/**/*.json
