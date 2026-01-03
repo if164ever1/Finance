@@ -53,6 +53,128 @@ function calculateCashback(amount) {
 }
 
 /**
+ * Parse and validate year/month from query params, with defaults to current month
+ * Returns {year, month} or throws error for invalid values
+ */
+function parseYearMonth(yearParam, monthParam) {
+    const now = new Date();
+    const year = yearParam ? parseInt(yearParam) : now.getFullYear();
+    const month = monthParam ? parseInt(monthParam) : (now.getMonth() + 1);
+    
+    // Validate year (reasonable range: 2000-2100)
+    if (isNaN(year) || year < 2000 || year > 2100) {
+        throw new Error('Invalid year. Must be between 2000 and 2100');
+    }
+    
+    // Validate month (1-12)
+    if (isNaN(month) || month < 1 || month > 12) {
+        throw new Error('Invalid month. Must be between 1 and 12');
+    }
+    
+    return { year, month };
+}
+
+/**
+ * Read transactions from file, return empty array if file is missing or corrupted
+ */
+async function readTransactions() {
+    try {
+        const fileContent = await fs.readFile(TRANSACTIONS_FILE, 'utf8');
+        const transactions = JSON.parse(fileContent);
+        
+        // Ensure it's an array
+        if (!Array.isArray(transactions)) {
+            return [];
+        }
+        
+        return transactions;
+    } catch (error) {
+        // File missing or corrupted, return empty array
+        if (error.code === 'ENOENT' || error instanceof SyntaxError) {
+            return [];
+        }
+        throw error; // Re-throw other errors
+    }
+}
+
+/**
+ * Filter transactions by year and month
+ */
+function filterByMonth(transactions, year, month) {
+    return transactions.filter(transaction => {
+        const transactionDate = new Date(transaction.date + 'T00:00:00');
+        return transactionDate.getFullYear() === year && 
+               (transactionDate.getMonth() + 1) === month;
+    });
+}
+
+/**
+ * Round money value to 2 decimal places
+ */
+function moneyRound(value) {
+    return Math.round(value * 100) / 100;
+}
+
+/**
+ * GET /api/dashboard
+ * Returns monthly dashboard summary (cashback-only)
+ * Query params: year (optional), month (optional) - defaults to current month
+ */
+app.get('/api/dashboard', async (req, res) => {
+    try {
+        // Parse and validate year/month from query params
+        let year, month;
+        try {
+            const parsed = parseYearMonth(req.query.year, req.query.month);
+            year = parsed.year;
+            month = parsed.month;
+        } catch (error) {
+            return res.status(400).json({ 
+                error: 'Invalid query parameters',
+                message: error.message 
+            });
+        }
+        
+        // Read transactions (gracefully handles missing/corrupted file)
+        const allTransactions = await readTransactions();
+        
+        // Filter transactions for the requested month/year
+        const monthTransactions = filterByMonth(allTransactions, year, month);
+        
+        // Calculate spending totals
+        const totalSpent = monthTransactions.reduce((sum, t) => sum + t.amount, 0);
+        
+        // Calculate cashback (3% rate)
+        const cashbackRate = 0.03;
+        const totalCashbackUSD = moneyRound(totalSpent * cashbackRate);
+        
+        // Build response
+        res.json({
+            period: {
+                year: year,
+                month: month,
+                label: `${getMonthName(month)} ${year}`
+            },
+            spending: {
+                count: monthTransactions.length,
+                totalSpent: moneyRound(totalSpent)
+            },
+            cashback: {
+                rate: cashbackRate,
+                totalCashbackUSD: totalCashbackUSD
+            }
+        });
+        
+    } catch (error) {
+        console.error('Error fetching dashboard data:', error);
+        res.status(500).json({ 
+            error: 'Failed to fetch dashboard data',
+            message: error.message 
+        });
+    }
+});
+
+/**
  * GET /api/monthly
  * Returns transactions for the specified month/year (defaults to current month)
  */
