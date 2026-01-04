@@ -67,6 +67,37 @@ body {
     letter-spacing: 0.5px;
 }
 
+.period-selector {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 16px;
+    align-items: center;
+}
+
+.period-selector select {
+    padding: 6px 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+    background-color: white;
+    color: #333;
+    cursor: pointer;
+}
+
+.period-selector select:focus {
+    outline: none;
+    border-color: #4CAF50;
+}
+
+/* Responsive: period selector stacks on smaller screens */
+@media (max-width: 900px) {
+    .period-selector {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 4px;
+    }
+}
+
 .dashboard-month-label {
     font-size: 24px;
     color: #333;
@@ -74,10 +105,32 @@ body {
     margin-bottom: 24px;
 }
 
+.sol-price-container {
+    margin-bottom: 24px;
+}
+
+.sol-price-badge {
+    display: inline-flex;
+    align-items: center;
+    border-radius: 999px;
+    padding: 6px 10px;
+    background-color: #f0f0ff;
+    color: #666;
+    font-size: 14px;
+    font-weight: 500;
+    border: 1px solid #ddd;
+}
+
+.sol-price-time {
+    font-size: 12px;
+    color: #999;
+    margin-top: 4px;
+}
+
 /* Dashboard Stats Grid */
 .dashboard-stats-grid {
     display: grid;
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
     gap: 16px;
 }
 
@@ -106,6 +159,12 @@ body {
 }
 
 .dashboard-stat-rate {
+    font-size: 12px;
+    color: #999;
+    margin-top: 4px;
+}
+
+.dashboard-stat-subtext {
     font-size: 12px;
     color: #999;
     margin-top: 4px;
@@ -284,6 +343,32 @@ button:active {
 .monthly-table .cashback-cell {
     color: #4CAF50;
     font-weight: 500;
+}
+
+.monthly-table .actions-cell {
+    text-align: center;
+    width: 80px;
+}
+
+.delete-btn {
+    background: none;
+    border: none;
+    cursor: pointer;
+    font-size: 16px;
+    color: #999;
+    padding: 4px 8px;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.delete-btn:hover {
+    color: #f44336;
+    background-color: #ffebee;
+}
+
+.delete-btn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
 }
 
 .monthly-table .empty-state {

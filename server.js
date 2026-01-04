@@ -172,6 +172,92 @@ async function fetchSolPriceFromApi(dateString) {
 }
 
 /**
+ * In-memory cache for live SOL price
+ */
+let livePriceCache = { price: null, timestamp: null };
+
+/**
+ * GET /api/price/sol/live
+ * Returns current SOL price with timestamp and caching
+ */
+app.get('/api/price/sol/live', async (req, res) => {
+    try {
+        const now = Date.now();
+        const cacheTTL = 15 * 60 * 1000; // 15 minutes
+        
+        // Check if we have a recent cached price
+        if (livePriceCache.price && (now - livePriceCache.timestamp) < cacheTTL) {
+            return res.json({
+                symbol: 'SOL',
+                priceUSD: livePriceCache.price,
+                asOf: new Date(livePriceCache.timestamp).toISOString(),
+                source: 'cache'
+            });
+        }
+        
+        // Fetch new price
+        const today = new Date().toISOString().split('T')[0];
+        let priceUSD;
+        try {
+            priceUSD = await fetchSolPriceFromApi(today);
+        } catch (apiError) {
+            // If API fails and no cache, return 502
+            if (!livePriceCache.price) {
+                return res.status(502).json({
+                    error: 'External API error',
+                    message: 'Failed to fetch SOL price and no cached value available'
+                });
+            }
+            // Return stale cache if available
+            return res.json({
+                symbol: 'SOL',
+                priceUSD: livePriceCache.price,
+                asOf: new Date(livePriceCache.timestamp).toISOString(),
+                source: 'stale-cache'
+            });
+        }
+        
+        // Update cache
+        livePriceCache = { price: priceUSD, timestamp: now };
+        
+        res.json({
+            symbol: 'SOL',
+            priceUSD: priceUSD,
+            asOf: new Date(now).toISOString(),
+            source: 'api'
+        });
+        
+    } catch (error) {
+        console.error('Error in live price endpoint:', error);
+        res.status(500).json({
+            error: 'Internal server error',
+            message: error.message
+        });
+    }
+});
+
+/**
+ * Get SOL price for a specific date, using cache or fetching if needed
+ */
+async function getSolPriceForDate(dateString) {
+    const cache = await readPricesCache();
+    
+    if (cache.sol[dateString]) {
+        return cache.sol[dateString];
+    }
+    
+    try {
+        const price = await fetchSolPriceFromApi(dateString);
+        cache.sol[dateString] = price;
+        await writePricesCache(cache);
+        return price;
+    } catch (error) {
+        console.warn(`Failed to fetch SOL price for ${dateString}:`, error.message);
+        return null;
+    }
+}
+
+/**
  * Get month name from month number (1-12)
  */
 function getMonthName(month) {
@@ -367,8 +453,60 @@ app.get('/api/dashboard', async (req, res) => {
         const cashbackRate = settings.cashbackRate;
         const totalCashbackUSD = moneyRound(totalSpent * cashbackRate);
         
+        // Calculate SOL simulation
+        let solTotalCashbackUSD = 0;
+        let solTotalSOL = 0;
+        let solSkipped = 0;
+        
+        for (const transaction of monthTransactions) {
+            const cashbackUSD = moneyRound(transaction.amount * cashbackRate);
+            solTotalCashbackUSD += cashbackUSD;
+            
+            const priceUSD = await getSolPriceForDate(transaction.date);
+            if (priceUSD !== null) {
+                const solBought = cashbackUSD / priceUSD;
+                solTotalSOL += solBought;
+            } else {
+                solSkipped++;
+            }
+        }
+        
+        const solAvgPriceUSD = solTotalSOL > 0 ? moneyRound(solTotalCashbackUSD / solTotalSOL) : null;
+        
+        // Calculate staking estimates
+        const stakingAPR = settings.stakingAPR;
+        const stakedSOL = Number(solTotalSOL.toFixed(6));
+        const estMonthlyRewardSOL = Number((stakedSOL * (stakingAPR / 12)).toFixed(6));
+        const estYearlyRewardSOL = Number((stakedSOL * stakingAPR).toFixed(6));
+        
+        // Calculate cumulative staking earnings to date
+        const asOfDate = new Date().toISOString().split('T')[0];
+        let earnedSOL = 0;
+        let skippedToDate = 0;
+        const asOfDateObj = new Date(asOfDate + 'T00:00:00');
+        
+        for (const transaction of allTransactions) {
+            const transactionDateObj = new Date(transaction.date + 'T00:00:00');
+            if (transactionDateObj > asOfDateObj) continue; // future transaction, skip
+            
+            const cashbackUSD = moneyRound(transaction.amount * cashbackRate);
+            const purchasePriceUSD = await getSolPriceForDate(transaction.date);
+            if (purchasePriceUSD === null) {
+                skippedToDate++;
+                continue;
+            }
+            
+            const solBought = cashbackUSD / purchasePriceUSD;
+            const daysStaked = Math.max(0, Math.floor((asOfDateObj - transactionDateObj) / (1000 * 60 * 60 * 24)));
+            const earnedFromThis = solBought * stakingAPR * (daysStaked / 365);
+            earnedSOL += earnedFromThis;
+        }
+        
+        const todayPriceUSD = await getSolPriceForDate(asOfDate);
+        const earnedUSD = todayPriceUSD !== null ? moneyRound(earnedSOL * todayPriceUSD) : 0;
+        
         // Build response
-        res.json({
+        const response = {
             period: {
                 year: year,
                 month: month,
@@ -381,8 +519,36 @@ app.get('/api/dashboard', async (req, res) => {
             cashback: {
                 rate: cashbackRate,
                 totalCashbackUSD: totalCashbackUSD
+            },
+            sol: {
+                method: "simulation",
+                totalCashbackUSD: moneyRound(solTotalCashbackUSD),
+                totalSOL: stakedSOL,
+                avgPriceUSD: solAvgPriceUSD
+            },
+            staking: {
+                apr: stakingAPR,
+                stakedSOL: stakedSOL,
+                estMonthlyRewardSOL: estMonthlyRewardSOL,
+                estYearlyRewardSOL: estYearlyRewardSOL
+            },
+            stakingToDate: {
+                asOf: asOfDate,
+                earnedSOL: Number(earnedSOL.toFixed(6)),
+                earnedUSD: earnedUSD,
+                apr: stakingAPR,
+                priceUSD: todayPriceUSD !== null ? moneyRound(todayPriceUSD) : null
             }
-        });
+        };
+        
+        if (solSkipped > 0) {
+            response.sol.skipped = solSkipped;
+        }
+        if (skippedToDate > 0) {
+            response.stakingToDate.skipped = skippedToDate;
+        }
+        
+        res.json(response);
         
     } catch (error) {
         console.error('Error fetching dashboard data:', error);
@@ -516,6 +682,43 @@ app.post('/api/transactions', async (req, res) => {
         console.error('Error creating transaction:', error);
         res.status(500).json({ 
             error: 'Failed to create transaction',
+            message: error.message 
+        });
+    }
+});
+
+/**
+ * DELETE /api/transactions/:id
+ * Deletes a transaction by ID
+ */
+app.delete('/api/transactions/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // Read existing transactions
+        const fileContent = await fs.readFile(TRANSACTIONS_FILE, 'utf8');
+        const transactions = JSON.parse(fileContent);
+        
+        // Find and remove the transaction
+        const index = transactions.findIndex(t => t.id === id);
+        if (index === -1) {
+            return res.status(404).json({ error: 'Transaction not found' });
+        }
+        
+        transactions.splice(index, 1);
+        
+        // Write back to file
+        const tempFile = TRANSACTIONS_FILE + '.tmp';
+        await fs.writeFile(tempFile, JSON.stringify(transactions, null, 2), 'utf8');
+        await fs.rename(tempFile, TRANSACTIONS_FILE);
+        
+        // Return success
+        res.json({ ok: true, deletedId: id });
+        
+    } catch (error) {
+        console.error('Error deleting transaction:', error);
+        res.status(500).json({ 
+            error: 'Failed to delete transaction',
             message: error.message 
         });
     }

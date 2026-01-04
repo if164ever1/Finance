@@ -12,6 +12,44 @@ const monthlySpent = document.getElementById('monthlySpent');
 const monthlyCashback = document.getElementById('monthlyCashback');
 const monthlyTableBody = document.getElementById('monthlyTableBody');
 
+// Period selector elements
+const monthSelector = document.getElementById('monthSelector');
+const yearSelector = document.getElementById('yearSelector');
+
+// Selected period state
+let selectedPeriod = {
+    year: new Date().getFullYear(),
+    month: new Date().getMonth() + 1
+};
+
+// Initialize period selectors
+function initializePeriodSelectors() {
+    // Populate year selector: current year ±5
+    const currentYear = new Date().getFullYear();
+    yearSelector.innerHTML = '';
+    for (let year = currentYear - 5; year <= currentYear + 5; year++) {
+        const option = document.createElement('option');
+        option.value = year;
+        option.textContent = year;
+        yearSelector.appendChild(option);
+    }
+    
+    // Set default values
+    monthSelector.value = selectedPeriod.month;
+    yearSelector.value = selectedPeriod.year;
+    
+    // Add event listeners
+    monthSelector.addEventListener('change', () => {
+        selectedPeriod.month = parseInt(monthSelector.value);
+        refreshForSelectedPeriod();
+    });
+    
+    yearSelector.addEventListener('change', () => {
+        selectedPeriod.year = parseInt(yearSelector.value);
+        refreshForSelectedPeriod();
+    });
+}
+
 // Set default date to today
 const today = new Date();
 const todayFormatted = today.toISOString().split('T')[0];
@@ -50,9 +88,15 @@ function formatDate(dateString) {
 }
 
 // Fetch and render monthly data
-async function loadMonthly() {
-    try {
-        const response = await fetch('/api/monthly');
+async function loadMonthly(period = selectedPeriod) {
+    try {        // Show loading state
+        monthlyLabel.textContent = 'Loading...';
+        monthlyCount.textContent = '0';
+        monthlySpent.textContent = '$0.00';
+        monthlyCashback.textContent = '$0.00';
+        monthlyTableBody.innerHTML = '<tr><td colspan="5" class="empty-state">Loading...</td></tr>';
+                const url = `/api/monthly?year=${period.year}&month=${period.month}`;
+        const response = await fetch(url);
         if (!response.ok) {
             throw new Error('Failed to load monthly data');
         }
@@ -78,7 +122,7 @@ function renderMonthlyData(data) {
     
     // Render table
     if (data.transactions.length === 0) {
-        monthlyTableBody.innerHTML = '<tr><td colspan="4" class="empty-state">No transactions for this month yet.</td></tr>';
+        monthlyTableBody.innerHTML = '<tr><td colspan="5" class="empty-state">No transactions for this month yet.</td></tr>';
     } else {
         monthlyTableBody.innerHTML = data.transactions.map(transaction => `
             <tr>
@@ -86,6 +130,9 @@ function renderMonthlyData(data) {
                 <td>${escapeHtml(transaction.description)}</td>
                 <td>${formatCurrency(transaction.amount)}</td>
                 <td class="cashback-cell">${formatCurrency(transaction.cashback)}</td>
+                <td class="actions-cell">
+                    <button class="delete-btn" data-id="${transaction.id}" title="Delete transaction">🗑️</button>
+                </td>
             </tr>
         `).join('');
     }
@@ -174,9 +221,8 @@ async function addPurchase() {
         purchaseAmountInput.value = '';
         cashbackAmountInput.value = '$0.00';
 
-        // Reload monthly data and dashboard data to show the new transaction
-        await loadMonthly();
-        await loadDashboard();
+        // Reload data for the currently selected period
+        await refreshForSelectedPeriod();
 
     } catch (error) {
         console.error('Error calling backend API:', error);
@@ -203,23 +249,60 @@ purchaseAmountInput.addEventListener('keypress', function(event) {
     }
 });
 
+// Event delegation for delete buttons
+monthlyTableBody.addEventListener('click', async function(event) {
+    if (event.target.classList.contains('delete-btn')) {
+        const id = event.target.dataset.id;
+        if (confirm('Delete this transaction?')) {
+            try {
+                event.target.disabled = true;
+                event.target.textContent = 'Deleting...';
+                
+                const response = await fetch(`/api/transactions/${id}`, { method: 'DELETE' });
+                if (!response.ok) throw new Error('Delete failed');
+                
+                // Refresh data
+                await refreshForSelectedPeriod();
+            } catch (error) {
+                console.error('Error deleting transaction:', error);
+                alert('Failed to delete transaction. Please try again.');
+                event.target.disabled = false;
+                event.target.textContent = '🗑️';
+            }
+        }
+    }
+});
+
 // Dashboard panel elements
 const dashboardMonthLabel = document.getElementById('dashboardMonthLabel');
 const dashboardCount = document.getElementById('dashboardCount');
 const dashboardSpent = document.getElementById('dashboardSpent');
 const dashboardCashback = document.getElementById('dashboardCashback');
 const dashboardRate = document.getElementById('dashboardRate');
+const dashboardSolPurchased = document.getElementById('dashboardSolPurchased');
+const dashboardStakingMonthly = document.getElementById('dashboardStakingMonthly');
+const dashboardStakingSubtext = document.getElementById('dashboardStakingSubtext');
+const dashboardStakingEarned = document.getElementById('dashboardStakingEarned');
+const dashboardStakingEarnedSubtext = document.getElementById('dashboardStakingEarnedSubtext');
+const solPriceBadge = document.getElementById('solPriceBadge');
+const solPriceTime = document.getElementById('solPriceTime');
 
 // Fetch and render dashboard data
-async function loadDashboard() {
+async function loadDashboard(period = selectedPeriod) {
     try {
         // Show loading state
         dashboardMonthLabel.textContent = 'Loading dashboard...';
         dashboardCount.textContent = '-';
         dashboardSpent.textContent = '-';
         dashboardCashback.textContent = '-';
+        dashboardSolPurchased.textContent = '- SOL';
+        dashboardStakingMonthly.textContent = 'Monthly: - SOL';
+        dashboardStakingSubtext.textContent = 'Yearly: - SOL • APR: -%';
+        dashboardStakingEarned.textContent = '$-';
+        dashboardStakingEarnedSubtext.textContent = '~- SOL • As of -';
         
-        const response = await fetch('/api/dashboard');
+        const url = `/api/dashboard?year=${period.year}&month=${period.month}`;
+        const response = await fetch(url);
         if (!response.ok) {
             throw new Error('Failed to load dashboard data');
         }
@@ -233,7 +316,17 @@ async function loadDashboard() {
         dashboardSpent.textContent = 'Error';
         dashboardCashback.textContent = 'Error';
         dashboardRate.textContent = '';
+        dashboardSolPurchased.textContent = 'Error';
+        dashboardStakingMonthly.textContent = 'Error';
+        dashboardStakingSubtext.textContent = 'Error';
+        dashboardStakingEarned.textContent = 'Error';
+        dashboardStakingEarnedSubtext.textContent = 'Error';
     }
+}
+
+// Refresh both monthly and dashboard for the selected period
+async function refreshForSelectedPeriod() {
+    await Promise.all([loadMonthly(selectedPeriod), loadDashboard(selectedPeriod)]);
 }
 
 // Render dashboard data to the right panel
@@ -249,9 +342,52 @@ function renderDashboardData(data) {
     // Update cashback rate (convert 0.03 to percentage)
     const ratePercent = (data.cashback.rate * 100).toFixed(0);
     dashboardRate.textContent = `Rate: ${ratePercent}%`;
+    
+    // Update SOL purchased
+    dashboardSolPurchased.textContent = `${data.sol.totalSOL.toFixed(6)} SOL`;
+    
+    // Update staking estimates
+    if (data.staking) {
+        dashboardStakingMonthly.textContent = `Monthly: +${data.staking.estMonthlyRewardSOL.toFixed(6)} SOL`;
+        const aprPercent = (data.staking.apr * 100).toFixed(2);
+        dashboardStakingSubtext.textContent = `Yearly: +${data.staking.estYearlyRewardSOL.toFixed(6)} SOL • APR: ${aprPercent}%`;
+    } else {
+        dashboardStakingMonthly.textContent = 'Monthly: +0.000000 SOL';
+        dashboardStakingSubtext.textContent = 'Yearly: +0.000000 SOL • APR: 0.00%';
+    }
+    
+    // Update staking earned to date
+    if (data.stakingToDate) {
+        dashboardStakingEarned.textContent = formatCurrency(data.stakingToDate.earnedUSD);
+        dashboardStakingEarnedSubtext.textContent = `~${data.stakingToDate.earnedSOL.toFixed(6)} SOL • As of ${data.stakingToDate.asOf}`;
+    } else {
+        dashboardStakingEarned.textContent = '$0.00';
+        dashboardStakingEarnedSubtext.textContent = '~0.000000 SOL • As of -';
+    }
+}
+
+// Load live SOL price
+async function loadSolLivePrice() {
+    try {
+        const response = await fetch('/api/price/sol/live');
+        if (!response.ok) throw new Error('API error');
+        
+        const data = await response.json();
+        solPriceBadge.textContent = `SOL $${data.priceUSD.toFixed(2)}`;
+        
+        const time = new Date(data.asOf).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        solPriceTime.textContent = `Updated ${time}`;
+    } catch (error) {
+        console.error('Error loading live SOL price:', error);
+        solPriceBadge.textContent = 'SOL --';
+        solPriceTime.textContent = 'Price unavailable';
+    }
 }
 
 // Load monthly data when page loads
-loadMonthly();
-// Load dashboard data when page loads
-loadDashboard();
+initializePeriodSelectors();
+refreshForSelectedPeriod();
+
+// Load live SOL price on page load and every 60 seconds
+loadSolLivePrice();
+setInterval(loadSolLivePrice, 60000);
