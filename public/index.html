@@ -139,6 +139,20 @@
                     <button id="downloadCsvBtn" class="export-btn">Download CSV</button>
                     <button id="downloadJsonBtn" class="export-btn">Download JSON</button>
                 </div>
+                <!-- Manage Categories (compact) -->
+                <div class="manage-categories-card">
+                    <div class="manage-categories-title">Manage Categories</div>
+                    <div class="manage-categories-content">
+                        <input id="newCategoryInput" type="text" placeholder="New category name">
+                        <div style="display:flex;gap:8px;margin-top:8px">
+                            <button id="addCategoryBtn">Add</button>
+                        </div>
+                        <div id="categoriesMessage" class="category-message" aria-live="polite"></div>
+                        <div id="categoriesList" class="category-manage-list">
+                            <!-- categories rendered here -->
+                        </div>
+                    </div>
+                </div>
                 <div class="dashboard-month-label" id="dashboardMonthLabel">Loading...</div>
                 
                 <div class="sol-price-container">

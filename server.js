@@ -8,6 +8,7 @@ const DATA_DIR = path.join(__dirname, 'data');
 const TRANSACTIONS_FILE = path.join(DATA_DIR, 'transactions.json');
 const SETTINGS_FILE = path.join(DATA_DIR, 'settings.json');
 const PRICES_FILE = path.join(DATA_DIR, 'prices.json');
+const CATEGORIES_FILE = path.join(DATA_DIR, 'categories.json');
 
 // Middleware
 app.use(express.json()); // Parse JSON request bodies
@@ -35,6 +36,9 @@ async function initializeData() {
 
         // Ensure prices.json exists
         await ensurePricesFile();
+        
+        // Ensure categories.json exists
+        await ensureCategoriesFile();
         
         console.log(`Data directory: ${DATA_DIR}`);
     } catch (error) {
@@ -102,6 +106,57 @@ async function ensurePricesFile() {
         await fs.writeFile(PRICES_FILE, JSON.stringify(initial, null, 2), 'utf8');
         console.log('Created prices.json file');
     }
+}
+
+/**
+ * Ensure categories.json exists, create with initial categories if missing
+ */
+async function ensureCategoriesFile() {
+    try {
+        await fs.access(CATEGORIES_FILE);
+    } catch {
+        const initial = {
+            categories: [
+                "Gymnastic",
+                "AT&T",
+                "Affirm",
+                "State Farm",
+                "Optimum",
+                "Water Utility",
+                "Grocery",
+                "Others"
+            ]
+        };
+        await fs.writeFile(CATEGORIES_FILE, JSON.stringify(initial, null, 2), 'utf8');
+        console.log('Created categories.json file');
+    }
+}
+
+/**
+ * Read categories from file and return array of category strings
+ * Always include 'Others' as a fallback option
+ */
+async function readCategories() {
+    try {
+        const fileContent = await fs.readFile(CATEGORIES_FILE, 'utf8');
+        const data = JSON.parse(fileContent);
+        const list = Array.isArray(data.categories) ? data.categories.slice() : [];
+        if (!list.includes('Others')) list.push('Others');
+        return list;
+    } catch (error) {
+        console.warn('Categories file missing or corrupted, using default list:', error.message);
+        return ["Others"];
+    }
+}
+
+/**
+ * Write categories array to file (atomic)
+ */
+async function writeCategories(list) {
+    const data = { categories: list };
+    const tempFile = CATEGORIES_FILE + '.tmp';
+    await fs.writeFile(tempFile, JSON.stringify(data, null, 2), 'utf8');
+    await fs.rename(tempFile, CATEGORIES_FILE);
 }
 
 /**
@@ -414,6 +469,89 @@ app.get('/api/settings', async (req, res) => {
             error: 'Failed to fetch settings',
             message: error.message 
         });
+    }
+});
+
+// GET /api/categories - list available categories
+app.get('/api/categories', async (req, res) => {
+    try {
+        const categories = await readCategories();
+        res.json({ categories });
+    } catch (error) {
+        console.error('Error reading categories:', error.message);
+        res.status(500).json({ error: 'Failed to read categories' });
+    }
+});
+
+/**
+ * POST /api/categories
+ * Body: { name: 'New Category' }
+ */
+app.post('/api/categories', async (req, res) => {
+    try {
+        const { name } = req.body;
+        if (!name || typeof name !== 'string') {
+            return res.status(400).json({ error: 'name is required and must be a string' });
+        }
+
+        const trimmed = name.trim();
+        if (trimmed === '') {
+            return res.status(400).json({ error: 'name must be a non-empty string' });
+        }
+
+        const categories = await readCategories();
+        // Prevent duplicates (case-insensitive)
+        if (categories.some(c => c.toLowerCase() === trimmed.toLowerCase())) {
+            return res.status(409).json({ error: 'Category already exists' });
+        }
+
+        categories.push(trimmed);
+        await writeCategories(categories);
+        res.json({ categories });
+    } catch (error) {
+        console.error('Error adding category:', error.message);
+        res.status(500).json({ error: 'Failed to add category' });
+    }
+});
+
+/**
+ * DELETE /api/categories/:name
+ */
+app.delete('/api/categories/:name', async (req, res) => {
+    try {
+        const raw = req.params.name || '';
+        const name = decodeURIComponent(raw).trim();
+        if (!name) return res.status(400).json({ error: 'Invalid category name' });
+
+        if (name.toLowerCase() === 'others') {
+            return res.status(400).json({ error: 'Cannot delete Others' });
+        }
+
+        const categories = await readCategories();
+        const idx = categories.findIndex(c => c.toLowerCase() === name.toLowerCase());
+        if (idx === -1) return res.status(404).json({ error: 'Category not found' });
+
+        // Check if any transaction uses this category (case-insensitive)
+        try {
+            const fileContent = await fs.readFile(TRANSACTIONS_FILE, 'utf8');
+            const transactions = JSON.parse(fileContent);
+            const inUse = transactions.some(t => (t.category || '').toLowerCase() === name.toLowerCase());
+            if (inUse) {
+                return res.status(409).json({ error: 'Category is in use', category: name });
+            }
+        } catch (readErr) {
+            console.warn('Failed to read transactions while deleting category:', readErr.message);
+            // If transactions file can't be read, be conservative and block deletion to avoid data loss
+            return res.status(500).json({ error: 'Failed to verify category usage' });
+        }
+
+        // Remove and write
+        categories.splice(idx, 1);
+        await writeCategories(categories);
+        res.json({ categories });
+    } catch (error) {
+        console.error('Error deleting category:', error.message);
+        res.status(500).json({ error: 'Failed to delete category' });
     }
 });
 

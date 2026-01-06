@@ -60,6 +60,142 @@ function initializePeriodSelectors() {
     });
 }
 
+// Initialize categories select by fetching from backend
+async function initializeCategories() {
+    const fallback = ['Others'];
+    try {
+        const resp = await fetch('/api/categories');
+        if (!resp.ok) throw new Error('Failed to fetch');
+        const data = await resp.json();
+        const categories = Array.isArray(data.categories) && data.categories.length ? data.categories : fallback;
+        purchaseCategorySelect.innerHTML = categories.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+        // Default selected value
+        if (categories.includes('Others')) purchaseCategorySelect.value = 'Others';
+        else purchaseCategorySelect.selectedIndex = 0;
+        // Also render manage list
+        renderCategoriesList(categories);
+    } catch (error) {
+        // Fallback to Others
+        purchaseCategorySelect.innerHTML = fallback.map(c => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`).join('');
+        purchaseCategorySelect.value = 'Others';
+        console.warn('Failed to load categories, using fallback:', error.message);
+        renderCategoriesList(fallback);
+    }
+}
+
+// Render the categories list in the Manage Categories card
+function renderCategoriesList(categories) {
+    const list = document.getElementById('categoriesList');
+    const msg = document.getElementById('categoriesMessage');
+    if (!list) return;
+    msg.textContent = '';
+
+    if (!Array.isArray(categories) || categories.length === 0) {
+        list.innerHTML = '<div class="category-summary-empty">No categories available.</div>';
+        return;
+    }
+
+    list.innerHTML = categories.map(c => {
+        const safe = escapeHtml(c);
+        const canDelete = c.toLowerCase() !== 'others' && c.toLowerCase() !== 'uncategorized';
+        return `
+            <div class="category-item">
+                <div class="category-name">${safe}</div>
+                <div>
+                    ${canDelete ? `<button class="category-delete-btn" data-name="${encodeURIComponent(c)}">Delete</button>` : ''}
+                </div>
+            </div>
+        `;
+    }).join('');
+}
+
+// Helper to show a short message in the categories area
+function showCategoryMessage(text, isError = true) {
+    const msg = document.getElementById('categoriesMessage');
+    if (!msg) return;
+    msg.style.color = isError ? '#f44336' : '#2e7d32';
+    msg.textContent = text;
+    setTimeout(() => { if (msg) msg.textContent = ''; }, 4000);
+}
+
+// Add category flow
+async function addCategory() {
+    const input = document.getElementById('newCategoryInput');
+    const btn = document.getElementById('addCategoryBtn');
+    if (!input || !btn) return;
+    const name = (input.value || '').trim();
+    if (!name) {
+        showCategoryMessage('Please enter a category name.');
+        return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Adding...';
+    try {
+        const resp = await fetch('/api/categories', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ name })
+        });
+
+        const data = await resp.json();
+        if (!resp.ok) {
+            if (resp.status === 409) showCategoryMessage('Category already exists.');
+            else showCategoryMessage(data.error || 'Failed to add category');
+            return;
+        }
+
+        // Success: clear input and refresh categories
+        input.value = '';
+        showCategoryMessage('Category added.', false);
+        await initializeCategories();
+    } catch (err) {
+        console.error('Error adding category:', err);
+        showCategoryMessage('Failed to contact server.');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Add';
+    }
+}
+
+// Delete category flow
+async function deleteCategoryByEncoded(encodedName) {
+    const name = decodeURIComponent(encodedName);
+    const listMsg = document.getElementById('categoriesMessage');
+    try {
+        const resp = await fetch(`/api/categories/${encodeURIComponent(name)}`, { method: 'DELETE' });
+        if (!resp.ok) {
+            const data = await resp.json().catch(() => ({}));
+            if (resp.status === 409) {
+                showCategoryMessage('Category is used in transactions');
+            } else {
+                showCategoryMessage(data.error || 'Failed to delete category');
+            }
+            return;
+        }
+
+        showCategoryMessage('Category deleted.', false);
+        await initializeCategories();
+    } catch (err) {
+        console.error('Error deleting category:', err);
+        showCategoryMessage('Failed to contact server.');
+    }
+}
+
+// Wire up add/delete UI after DOM is ready
+document.addEventListener('click', function (ev) {
+    if (ev.target && ev.target.id === 'addCategoryBtn') {
+        addCategory();
+    }
+
+    if (ev.target && ev.target.classList.contains('category-delete-btn')) {
+        const encoded = ev.target.getAttribute('data-name');
+        if (!encoded) return;
+        // No confirm dialog required, but keep UX simple; user can re-add if needed
+        deleteCategoryByEncoded(encoded);
+    }
+});
+
 // Initialize export button event listeners
 function initializeExportButtons() {
     downloadCsvBtn.addEventListener('click', () => {
@@ -398,8 +534,8 @@ async function addPurchase() {
         return;
     }
 
-    // Get category (default to "Uncategorized" if not selected)
-    const category = purchaseCategorySelect.value || 'Uncategorized';
+    // Get category (default to "Others" if not selected)
+    const category = purchaseCategorySelect.value || 'Others';
 
     // Disable button and show saving state
     addPurchaseBtn.disabled = true;
@@ -430,7 +566,7 @@ async function addPurchase() {
         // Clear the input fields
         purchaseDescriptionInput.value = '';
         purchaseAmountInput.value = '';
-        purchaseCategorySelect.value = 'Uncategorized'; // Reset to default
+        purchaseCategorySelect.value = 'Others'; // Reset to default
         cashbackAmountInput.value = '$0.00';
 
         // Reload both monthly (current month) and dashboard (selected period) data
@@ -600,6 +736,8 @@ async function loadSolLivePrice() {
 initializePeriodSelectors();
 initializeExportButtons();
 refreshForSelectedPeriod();
+// Populate categories dropdown
+initializeCategories();
 
 // Load live SOL price on page load and every 60 seconds
 loadSolLivePrice();
