@@ -22,6 +22,19 @@
                     placeholder="What did you pay for? (e.g., Gym, Gas, Groceries)"
                     required
                 >
+                <label for="purchaseCategory">Category</label>
+                <select id="purchaseCategory">
+                    <option value="Uncategorized">Uncategorized</option>
+                    <option value="Groceries">Groceries</option>
+                    <option value="Gas">Gas</option>
+                    <option value="Bills">Bills</option>
+                    <option value="Gym">Gym</option>
+                    <option value="Eating Out">Eating Out</option>
+                    <option value="Shopping">Shopping</option>
+                    <option value="Travel">Travel</option>
+                    <option value="Kids">Kids</option>
+                    <option value="Other">Other</option>
+                </select>
                 <label for="purchaseAmount">Purchase Amount (USD)</label>
                 <input 
                     type="number" 
@@ -66,12 +79,21 @@
                     </div>
                 </div>
                 
+                <!-- Spend by Category Section -->
+                <div class="category-summary-section">
+                    <h4 class="category-summary-title">Spend by Category</h4>
+                    <div class="category-summary-content" id="categorySummaryContent">
+                        <!-- Category summary will be populated by JS -->
+                    </div>
+                </div>
+                
                 <div class="monthly-table-container">
                     <table class="monthly-table" id="monthlyTable">
                         <thead>
                             <tr>
                                 <th>Date</th>
                                 <th>Description</th>
+                                <th>Category</th>
                                 <th>Amount</th>
                                 <th>Cashback</th>
                                 <th>Actions</th>
@@ -113,6 +135,10 @@
                         <!-- Years will be populated by JS -->
                     </select>
                 </div>
+                <div class="export-section">
+                    <button id="downloadCsvBtn" class="export-btn">Download CSV</button>
+                    <button id="downloadJsonBtn" class="export-btn">Download JSON</button>
+                </div>
                 <div class="dashboard-month-label" id="dashboardMonthLabel">Loading...</div>
                 
                 <div class="sol-price-container">
@@ -148,6 +174,15 @@
                         <div class="dashboard-stat-label">Staking Earned (Est.)</div>
                         <div class="dashboard-stat-value" id="dashboardStakingEarned">$0.00</div>
                         <div class="dashboard-stat-subtext" id="dashboardStakingEarnedSubtext">~0.000000 SOL • As of 2026-01-02</div>
+                    </div>
+                </div>
+                
+                <!-- Spending by Category Chart -->
+                <div class="dashboard-chart-card">
+                    <div class="dashboard-chart-title">Spending by Category</div>
+                    <div class="dashboard-chart-content">
+                        <canvas id="categoryPieChart" width="400" height="260"></canvas>
+                        <div id="categoryPieLegend" class="chart-legend"></div>
                     </div>
                 </div>
             </div>

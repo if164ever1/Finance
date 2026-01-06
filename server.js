@@ -601,6 +601,7 @@ app.get('/api/monthly', async (req, res) => {
                 id: transaction.id,
                 date: transaction.date,
                 description: transaction.description,
+                category: transaction.category || 'Uncategorized',
                 amount: transaction.amount,
                 cashback: cashback
             };
@@ -610,12 +611,28 @@ app.get('/api/monthly', async (req, res) => {
         totals.spent = Math.round(totals.spent * 100) / 100;
         totals.cashback = Math.round(totals.cashback * 100) / 100;
         
+        // Calculate category summary
+        const categorySummary = {};
+        monthTransactions.forEach(transaction => {
+            const category = transaction.category || 'Uncategorized';
+            if (!categorySummary[category]) {
+                categorySummary[category] = 0;
+            }
+            categorySummary[category] += transaction.amount;
+        });
+        
+        // Round category totals to 2 decimals
+        Object.keys(categorySummary).forEach(category => {
+            categorySummary[category] = Math.round(categorySummary[category] * 100) / 100;
+        });
+        
         // Return response
         res.json({
             year: year,
             month: month,
             label: `${getMonthName(month)} ${year}`,
             totals: totals,
+            categorySummary: categorySummary,
             transactions: transactionsWithCashback
         });
         
@@ -634,7 +651,7 @@ app.get('/api/monthly', async (req, res) => {
  */
 app.post('/api/transactions', async (req, res) => {
     try {
-        const { date, description, amount } = req.body;
+        const { date, description, category, amount } = req.body;
         
         // Validation
         if (!description || typeof description !== 'string' || description.trim() === '') {
@@ -648,6 +665,11 @@ app.post('/api/transactions', async (req, res) => {
         if (!date || !/^\d{4}-\d{2}-\d{2}$/.test(date)) {
             return res.status(400).json({ error: 'date is required and must be in YYYY-MM-DD format' });
         }
+        
+        // Validate category (optional, defaults to "Uncategorized")
+        const validCategory = (category && typeof category === 'string' && category.trim() !== '') 
+            ? category.trim() 
+            : 'Uncategorized';
         
         // Validate date is valid
         const dateObj = new Date(date + 'T00:00:00');
@@ -664,6 +686,7 @@ app.post('/api/transactions', async (req, res) => {
             id: Date.now().toString() + '-' + Math.random().toString(36).substr(2, 9),
             date: date,
             description: description.trim(),
+            category: validCategory,
             amount: amount
         };
         
@@ -723,6 +746,71 @@ app.delete('/api/transactions/:id', async (req, res) => {
         });
     }
 });
+
+// Export endpoints
+app.get('/api/export/transactions.csv', async (req, res) => {
+    try {
+        let transactions = [];
+        try {
+            const fileContent = await fs.readFile(TRANSACTIONS_FILE, 'utf8');
+            transactions = JSON.parse(fileContent);
+        } catch (error) {
+            // If file doesn't exist or is corrupted, use empty array
+            console.warn('Transactions file missing or corrupted for export, using empty array:', error.message);
+        }
+
+        // Convert to CSV
+        const csvHeader = 'id,date,description,amount\n';
+        const csvRows = transactions.map(transaction => {
+            const id = escapeCsvField(transaction.id || '');
+            const date = escapeCsvField(transaction.date || '');
+            const description = escapeCsvField(transaction.description || '');
+            const amount = escapeCsvField(transaction.amount || '');
+            return `${id},${date},${description},${amount}`;
+        }).join('\n');
+        
+        const csvContent = csvHeader + csvRows;
+
+        res.setHeader('Content-Type', 'text/csv');
+        res.setHeader('Content-Disposition', 'attachment; filename="transactions.csv"');
+        res.send(csvContent);
+    } catch (error) {
+        console.error('Error exporting transactions to CSV:', error);
+        res.status(500).json({ error: 'Failed to export transactions' });
+    }
+});
+
+app.get('/api/export/transactions.json', async (req, res) => {
+    try {
+        let fileContent = '[]'; // Default empty array
+        try {
+            fileContent = await fs.readFile(TRANSACTIONS_FILE, 'utf8');
+            // Validate it's valid JSON
+            JSON.parse(fileContent);
+        } catch (error) {
+            console.warn('Transactions file missing or corrupted for JSON export, using empty array:', error.message);
+        }
+
+        res.setHeader('Content-Type', 'application/json');
+        res.setHeader('Content-Disposition', 'attachment; filename="transactions.json"');
+        res.send(fileContent);
+    } catch (error) {
+        console.error('Error exporting transactions to JSON:', error);
+        res.status(500).json({ error: 'Failed to export transactions' });
+    }
+});
+
+/**
+ * Escape a field for CSV format
+ */
+function escapeCsvField(field) {
+    const stringField = String(field);
+    // If field contains comma, quote, or newline, wrap in quotes and escape internal quotes
+    if (stringField.includes(',') || stringField.includes('"') || stringField.includes('\n') || stringField.includes('\r')) {
+        return '"' + stringField.replace(/"/g, '""') + '"';
+    }
+    return stringField;
+}
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {
